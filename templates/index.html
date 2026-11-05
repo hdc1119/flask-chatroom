@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>WebSocket 線上聊天室</title>
+    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background: #f2f4f8;
+            display: flex;
+            justify-content: center;
+            padding: 50px 15px;
+        }
+        .chat {
+            background: white;
+            width: 450px;
+            padding: 25px;
+            border-radius: 15px;
+            box-shadow: 0 4px 20px #0001;
+        }
+        h2 { text-align: center; }
+        #messages {
+            height: 350px;
+            overflow-y: auto;
+            border: 1px solid #ddd;
+            padding: 12px;
+            margin: 20px 0;
+            border-radius: 8px;
+        }
+        .message {
+            padding: 8px;
+            margin-bottom: 8px;
+            background: #eef2ff;
+            border-radius: 8px;
+            overflow-wrap: anywhere;
+        }
+        .controls { display: flex; gap: 8px; }
+        input {
+            flex: 1;
+            min-width: 0;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+        }
+        button {
+            background: #6478d3;
+            color: white;
+            border: none;
+            padding: 10px 15px;
+            border-radius: 8px;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+<div class="chat">
+    <h2>💬 WebSocket 線上聊天室</h2>
+    <p style="text-align:center;">
+    🟢 目前線上人數：<span id="online-count">0</span> 人
+</p>
+    <div class="controls">
+        <input id="username" placeholder="輸入你的暱稱">
+    </div>
+    <div id="messages"></div>
+    <div class="controls">
+        <input id="message" placeholder="輸入訊息...">
+        <button onclick="sendMessage()">發送</button>
+    </div>
+</div>
+
+<script>
+    const socket = io();
+    // 使用者加入聊天室
+
+
+// 更新線上人數
+socket.on('user_count', function(data) {
+    document.getElementById('online-count').textContent = data.count;
+});
+let joined = false;
+
+function joinChat() {
+    const username = document.getElementById('username').value.trim();
+
+    if (!username || joined || !socket.connected) return;
+
+    socket.emit('join', { username: username });
+    joined = true;
+}
+
+socket.on('connect', function() {
+    joined = false;
+    joinChat();
+});
+document.getElementById('username').addEventListener('change', function() {
+    const newName = this.value.trim();
+
+    if (!newName) return;
+
+    if (!joined) {
+        joinChat();
+    } else {
+        socket.emit('change_username', {
+            username: newName
+        });
+    }
+});
+
+function addSystemMessage(text) {
+    const item = document.createElement('div');
+    item.style.textAlign = 'center';
+    item.style.color = '#888';
+    item.style.fontSize = '13px';
+    item.style.margin = '10px 0';
+    item.textContent = text;
+
+    document.getElementById('messages').appendChild(item);
+}
+
+// 有人加入
+socket.on('user_joined', function(data) {
+    addSystemMessage(data.username + ' 加入了聊天');
+});
+socket.on('user_left', function(data) {
+    addSystemMessage(data.username + ' 離開了聊天');
+});
+socket.on('username_changed', function(data) {
+    addSystemMessage(
+        data.old_name + ' 已將名稱更改為 ' + data.new_name
+    );
+});
+
+
+    socket.on('message', function(data) {
+        const item = document.createElement('div');
+        item.className = 'message';
+        item.textContent = data;
+        document.getElementById('messages').appendChild(item);
+        item.scrollIntoView({behavior: 'smooth'});
+    });
+
+    socket.on('typing', function(data) {
+    console.log('收到其他使用者輸入狀態：', data);
+
+    const status = document.getElementById('typing-status');
+
+    status.textContent = data.username + ' 正在輸入...';
+
+    clearTimeout(window.typingTimer);
+
+    window.typingTimer = setTimeout(function() {
+        status.textContent = '';
+    }, 2000);
+});
+
+    function sendMessage() {
+        const name = document.getElementById('username').value.trim() || '匿名';
+        const input = document.getElementById('message');
+        const message = input.value.trim();
+
+        if (message) {
+            socket.send(name + '：' + message);
+            input.value = '';
+        }
+    }
+
+    document.getElementById('message').addEventListener('keydown', function(e) {
+        if (e.key === 'Enter') sendMessage();
+    });
+</script>
+</body>
+</html>
